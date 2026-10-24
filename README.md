@@ -4,12 +4,10 @@
 
 ## 当前进度
 
-- 已建立 React 19、TypeScript 和 Vite 工程；
-- 已拆分应用外壳、首页、科目卡片、学习页和家长页；
-- 已集中保存任务数量、每日目标和 10/30/50 星徽章配置；
-- 已接入三科答题、语音、星星奖励、家长设置与最近 7 天报告；
-- 已建立可替换的数据服务层，并准备 Supabase 数据库建表与权限脚本；
-- 当前仍使用本机存储，尚未连接在线账号。
+- 已建立 React、TypeScript 和 Vite 前端，并拆分首页、学习页和家长页；
+- 已连接 Supabase 家长账号、数据库和云端学习记录；家长登录、答题记录、学习设置与星星总数可以同步；
+- 本地数据仍会保留为备用存储；云端连接失败时可以继续使用本地题库；
+- 每科题库按 3–4 岁、5–6 岁分层，每个年龄段各 50 道题；云端需要执行下方题库更新脚本。
 
 ## 本地运行
 
@@ -27,8 +25,13 @@ npm run build
 
 ## 数据层
 
-- `src/services/learningStore.ts`：当前本机数据服务；
-- `supabase/schema.sql`：后端数据库和行级权限脚本；
-- `.env.example`：未来连接 Supabase 所需的公开环境变量模板。
+- `src/services/learningStore.ts`：本机备用数据存储；
+- `src/services/cloudLearningStore.ts`：Supabase 云端同步；
+- `supabase/schema.sql`：数据库表和家长数据权限；
+- `.env.example`：Supabase 公开连接配置模板。不要把 `.env.local` 上传到 GitHub。
 
-下一步：创建 Supabase 项目、执行数据库脚本，然后接入家长登录与云端同步。
+## 题库扩展
+
+- 本地题库为每科、每个年龄段各 50 道题（每科合计 100 道）；
+- 在 Supabase SQL Editor 执行 `supabase/add_question_bank_100.sql`，脚本会为每科、每个年龄段新增 38 道题，并保留已有的 12 道入门题；
+- 云端题库加载失败时，应用会使用相同的本地年龄分层题库。

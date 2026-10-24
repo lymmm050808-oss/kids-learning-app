@@ -9,5 +9,5 @@ export async function loadQuestions(subject: SubjectId, ageGroup: AgeGroup): Pro
       return { source: 'cloud', questions: data.map((item) => ({ id: item.question_id, emoji: item.emoji || '', prompt: item.prompt, speech: item.speech, lang: item.lang, question: item.question, answers: item.answers, correct: item.correct })) }
     }
   }
-  return { source: 'local', questions: questionBank[subject] }
+  return { source: 'local', questions: questionBank[subject][ageGroup] }
 }
