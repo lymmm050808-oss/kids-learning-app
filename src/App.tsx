@@ -20,11 +20,24 @@ const initialState = (): LearningState => {
   const fallback: LearningState = { stars: 0, settings: { ageGroup: appConfig.defaultAgeGroup, dailyQuestionGoal: appConfig.defaultDailyQuestionGoal, dailyTimeLimitMinutes: appConfig.defaultDailyTimeLimitMinutes }, daily: freshDaily(), history: [] }
   try { const saved = learningStore.load(); if (!saved) return fallback; const isToday = saved.daily?.date === today(); const history = [...(saved.history || []), ...(saved.daily?.date && !isToday ? [saved.daily] : [])].filter((day, index, all) => all.findIndex((item) => item.date === day.date) === index).slice(-30); return { ...fallback, ...saved, history, settings: { ...fallback.settings, ...saved.settings }, daily: isToday ? { ...fallback.daily, ...saved.daily } : freshDaily() } } catch { return fallback }
 }
+const reminderFor = ({ daily, settings }: LearningState) => {
+  if (daily.noticeShown) return null
+  const goalDone = Object.values(daily.attempts).every((count) => count >= settings.dailyQuestionGoal)
+  const timeDone = daily.activeSeconds >= settings.dailyTimeLimitMinutes * 60
+  if (goalDone) return '今日探索任务已完成。好好休息，才能更好地探索知识宇宙。'
+  if (timeDone) return `今天已经探索 ${settings.dailyTimeLimitMinutes} 分钟啦。好好休息，才能更好地探索知识宇宙。`
+  return null
+}
 function App() {
+  const [initial] = useState(() => {
+    const savedState = initialState()
+    const initialReminder = reminderFor(savedState)
+    return { state: initialReminder ? { ...savedState, daily: { ...savedState.daily, noticeShown: true } } : savedState, reminder: initialReminder }
+  })
   const [view, setView] = useState<AppView>('home')
   const [subject, setSubject] = useState<SubjectId>('chinese')
-  const [state, setState] = useState(initialState)
-  const [reminder, setReminder] = useState<string | null>(null)
+  const [state, setState] = useState(initial.state)
+  const [reminder, setReminder] = useState<string | null>(initial.reminder)
   const [cloudStatus, setCloudStatus] = useState('正在检查云端连接…')
   const [parentEmail, setParentEmail] = useState<string | null>(null)
   const [authReady, setAuthReady] = useState(!supabase)
@@ -36,6 +49,16 @@ function App() {
   const sessionPromiseRef = useRef<Promise<string | null> | null>(null)
   const sessionActiveSecondsRef = useRef(0)
   const sessionFinishedRef = useRef(true)
+  const updateState = useCallback((makeNext: (current: LearningState) => LearningState) => {
+    let next = makeNext(stateRef.current)
+    const reminderText = reminderFor(next)
+    if (reminderText) {
+      setReminder(reminderText)
+      next = { ...next, daily: { ...next.daily, noticeShown: true } }
+    }
+    stateRef.current = next
+    setState(next)
+  }, [])
   useEffect(() => { stateRef.current = state; learningStore.save(state) }, [state])
   useEffect(() => {
     checkSupabaseConnection().then((result) => {
@@ -48,13 +71,13 @@ function App() {
     initializeCloudLearning(stateRef.current).then((result) => {
       if (!active) return
       setChildId(result.childId)
-      setState(result.state)
+      updateState(() => result.state)
       setCloudStatus(result.source === 'cloud' ? '已读取云端学习记录' : '本机记录已保存到云端')
     }).catch((error: unknown) => {
       if (active) setCloudStatus(`云端同步暂不可用：${error instanceof Error ? error.message : '未知错误'}`)
     })
     return () => { active = false }
-  }, [parentEmail])
+  }, [parentEmail, updateState])
   useEffect(() => {
     if (!childId) return
     const sync = () => saveCloudLearning(childId, stateRef.current)
@@ -84,13 +107,6 @@ function App() {
     })
     return () => data.subscription.unsubscribe()
   }, [])
-  const updateState = useCallback((makeNext: (current: LearningState) => LearningState) => setState((current) => {
-    const next = makeNext(current)
-    const goalDone = Object.values(next.daily.correct).every((count) => count >= next.settings.dailyQuestionGoal)
-    const timeDone = next.daily.activeSeconds >= next.settings.dailyTimeLimitMinutes * 60
-    if (!next.daily.noticeShown && (goalDone || timeDone)) { setReminder(goalDone ? '今日探索任务已完成。好好休息，才能更好地探索知识宇宙。' : `今天已经探索 ${next.settings.dailyTimeLimitMinutes} 分钟啦。好好休息，才能更好地探索知识宇宙。`); return { ...next, daily: { ...next.daily, noticeShown: true } } }
-    return next
-  }), [])
   const onActiveSecond = useCallback(() => {
     sessionActiveSecondsRef.current += 1
     updateState((current) => ({ ...current, daily: { ...current.daily, activeSeconds: current.daily.activeSeconds + 1 } }))
@@ -127,7 +143,7 @@ function App() {
     finishSession(false)
     setView('home')
   }
-  const updateSettings = (settings: ParentSettings) => setState((current) => ({ ...current, settings }))
+  const updateSettings = (settings: ParentSettings) => updateState((current) => ({ ...current, settings }))
   return <main className="app-shell">
     <AppHeader stars={state.stars} />
     <InstallAppButton />
@@ -140,3 +156,4 @@ function App() {
   </main>
 }
 export default App
+
