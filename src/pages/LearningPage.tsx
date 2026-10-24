@@ -4,9 +4,9 @@ import { subjects } from '../data/subjects'
 import { loadQuestions } from '../services/questionService'
 import type { AgeGroup, Question, SubjectId } from '../types/domain'
 
-interface Props { subject: SubjectId; ageGroup: AgeGroup; onBack: () => void; onAnswer: (correct: boolean, questionId: string | undefined, selectedAnswer: string) => void; onActiveSecond: () => void }
+interface Props { subject: SubjectId; ageGroup: AgeGroup; onBack: () => void; onComplete: () => void; onAnswer: (correct: boolean, questionId: string | undefined, selectedAnswer: string) => void; onActiveSecond: () => void }
 
-export function LearningPage({ subject, ageGroup, onBack, onAnswer, onActiveSecond }: Props) {
+export function LearningPage({ subject, ageGroup, onBack, onComplete, onAnswer, onActiveSecond }: Props) {
   const current = subjects.find((item) => item.id === subject)!
   const [mission, setMission] = useState<Question[]>([])
   const [loading, setLoading] = useState(true)
@@ -29,10 +29,22 @@ export function LearningPage({ subject, ageGroup, onBack, onAnswer, onActiveSeco
   }, [subject, ageGroup])
 
   useEffect(() => {
-    if (loading) return
-    const timer = window.setInterval(onActiveSecond, 1000)
-    return () => window.clearInterval(timer)
-  }, [loading, onActiveSecond])
+    if (loading || complete) return
+    let timer: number | null = null
+    const syncTimer = () => {
+      if (document.visibilityState === 'visible' && timer === null) timer = window.setInterval(onActiveSecond, 1000)
+      else if (document.visibilityState !== 'visible' && timer !== null) {
+        window.clearInterval(timer)
+        timer = null
+      }
+    }
+    document.addEventListener('visibilitychange', syncTimer)
+    syncTimer()
+    return () => {
+      document.removeEventListener('visibilitychange', syncTimer)
+      if (timer !== null) window.clearInterval(timer)
+    }
+  }, [loading, complete, onActiveSecond])
 
   const choose = (answer: string) => {
     if (selected || !item) return
@@ -42,7 +54,7 @@ export function LearningPage({ subject, ageGroup, onBack, onAnswer, onActiveSeco
     if (isCorrect) setCorrectCount((value) => value + 1)
   }
   const next = () => {
-    if (index === mission.length - 1) setComplete(true)
+    if (index === mission.length - 1) { setComplete(true); onComplete() }
     else { setIndex((value) => value + 1); setSelected(null) }
   }
   const speak = () => {
