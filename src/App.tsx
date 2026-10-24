@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { AppHeader } from './components/AppHeader'
 import { ParentAuth } from './components/ParentAuth'
@@ -34,7 +34,8 @@ function App() {
   const [learningInsights, setLearningInsights] = useState<LearningInsight[]>([])
   const stateRef = useRef(state)
   const sessionPromiseRef = useRef<Promise<string | null> | null>(null)
-  const sessionStartedAtRef = useRef(0)
+  const sessionActiveSecondsRef = useRef(0)
+  const sessionFinishedRef = useRef(true)
   useEffect(() => { stateRef.current = state; learningStore.save(state) }, [state])
   useEffect(() => {
     checkSupabaseConnection().then((result) => {
@@ -83,17 +84,32 @@ function App() {
     })
     return () => data.subscription.unsubscribe()
   }, [])
-  const updateState = (makeNext: (current: LearningState) => LearningState) => setState((current) => {
+  const updateState = useCallback((makeNext: (current: LearningState) => LearningState) => setState((current) => {
     const next = makeNext(current)
     const goalDone = Object.values(next.daily.correct).every((count) => count >= next.settings.dailyQuestionGoal)
     const timeDone = next.daily.activeSeconds >= next.settings.dailyTimeLimitMinutes * 60
     if (!next.daily.noticeShown && (goalDone || timeDone)) { setReminder(goalDone ? '今日探索任务已完成。好好休息，才能更好地探索知识宇宙。' : `今天已经探索 ${next.settings.dailyTimeLimitMinutes} 分钟啦。好好休息，才能更好地探索知识宇宙。`); return { ...next, daily: { ...next.daily, noticeShown: true } } }
     return next
-  })
+  }), [])
+  const onActiveSecond = useCallback(() => {
+    sessionActiveSecondsRef.current += 1
+    updateState((current) => ({ ...current, daily: { ...current.daily, activeSeconds: current.daily.activeSeconds + 1 } }))
+  }, [updateState])
+  const finishSession = (completed: boolean) => {
+    if (sessionFinishedRef.current) return
+    sessionFinishedRef.current = true
+    const activeSeconds = sessionActiveSecondsRef.current
+    const pendingSession = sessionPromiseRef.current
+    sessionPromiseRef.current = null
+    pendingSession?.then((sessionId) => sessionId ? finishLearningSession(sessionId, activeSeconds, completed) : undefined)
+      .then(() => { if (completed) setTrackingStatus('本次学习任务已完成并记录') })
+      .catch((error: unknown) => setTrackingStatus(`学习任务记录失败：${error instanceof Error ? error.message : '未知错误'}`))
+  }
   const startLearning = (nextSubject: SubjectId) => {
     setSubject(nextSubject)
     setView('learning')
-    sessionStartedAtRef.current = Date.now()
+    sessionActiveSecondsRef.current = 0
+    sessionFinishedRef.current = false
     sessionPromiseRef.current = childId
       ? startLearningSession(childId, nextSubject, state.settings.ageGroup).catch((error: unknown) => { setTrackingStatus(`任务建档失败：${error instanceof Error ? error.message : '未知错误'}`); return null })
       : null
@@ -108,9 +124,7 @@ function App() {
     }
   }
   const leaveLearning = () => {
-    const elapsed = Math.max(0, Math.round((Date.now() - sessionStartedAtRef.current) / 1000))
-    sessionPromiseRef.current?.then((sessionId) => sessionId ? finishLearningSession(sessionId, elapsed, false) : undefined).catch(() => undefined)
-    sessionPromiseRef.current = null
+    finishSession(false)
     setView('home')
   }
   const updateSettings = (settings: ParentSettings) => setState((current) => ({ ...current, settings }))
@@ -118,7 +132,7 @@ function App() {
     <AppHeader stars={state.stars} />
     <InstallAppButton />
     {view === 'home' && <HomePage ageGroup={state.settings.ageGroup} daily={state.daily} goal={state.settings.dailyQuestionGoal} onSelectSubject={startLearning} onOpenParent={() => setView('parent')} />}
-    {view === 'learning' && <LearningPage subject={subject} ageGroup={state.settings.ageGroup} onBack={leaveLearning} onAnswer={recordAnswer} onActiveSecond={() => updateState((current) => ({ ...current, daily: { ...current.daily, activeSeconds: current.daily.activeSeconds + 1 } }))} />}
+    {view === 'learning' && <LearningPage subject={subject} ageGroup={state.settings.ageGroup} onBack={leaveLearning} onComplete={() => finishSession(true)} onAnswer={recordAnswer} onActiveSecond={onActiveSecond} />}
     {view === 'parent' && !authReady && <section className="panel parent-auth"><p>正在检查家长登录状态…</p></section>}
     {view === 'parent' && authReady && !parentEmail && <ParentAuth />}
     {view === 'parent' && authReady && parentEmail && <><div className="signed-in-bar"><span>家长账号：{parentEmail} · 已记录 {answerDetailCount} 次答题明细 · {trackingStatus}</span><button className="text-button" onClick={() => supabase?.auth.signOut()}>退出登录</button></div><ParentPage stars={state.stars} settings={state.settings} daily={state.daily} history={state.history} cloudStatus={cloudStatus} onChange={updateSettings} onBack={() => setView('home')} /><LearningInsights items={learningInsights} /></>}
