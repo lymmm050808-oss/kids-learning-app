@@ -41,3 +41,10 @@ npm run build
 - 应用页面要求家长账号登录，网页不提供新账号注册入口；
 - 部署前还需要在 Supabase Auth 设置中关闭“Allow new users to sign up”。关闭后，已存在的家长账号仍可登录；
 - Supabase 官方说明：[Auth 通用配置](https://supabase.com/docs/guides/auth/general-configuration)。
+
+## 启蒙知识库与检索（第一阶段）
+
+- 家长中心提供按科目和儿童年龄段筛选的启蒙资料检索；
+- 首批中文资料摘要保存在 `src/data/learningKnowledge.ts`，每条资料都附有原始来源链接；
+- `src/services/knowledgeSearch.ts` 使用本地关键词匹配，不会把搜索内容发送到第三方；
+- 这是 RAG 的“检索”准备阶段，目前没有向量检索，也不会由 AI 自动生成回答；不需要模型密钥或付费 API。
