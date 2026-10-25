@@ -1,20 +1,40 @@
-# 幼儿启蒙 · 正式软件工程
+# 幼儿启蒙 · 知识星球
 
-这是从 `KidsLearningDemo` 原型逐步迁移而来的 React + TypeScript 正式工程。
+面向家庭使用的语文、数学和英语启蒙学习 PWA。项目从可交互原型继续扩展，包含儿童答题、家长设置与学习记录、家长资料检索和 Supabase 云端数据。
 
-## 当前进度
+## 当前完成情况
 
-- 已建立 React、TypeScript 和 Vite 前端，并拆分首页、学习页和家长页；
-- 已连接 Supabase 家长账号、数据库和云端学习记录；家长登录、答题记录、学习设置与星星总数可以同步；
-- 本地数据仍会保留为备用存储；云端连接失败时可以继续使用本地题库；
-- 每科题库按 3–4 岁、5–6 岁分层，每个年龄段各 50 道题；云端需要执行下方题库更新脚本。
+- React、TypeScript、Vite 前端；按首页、答题页、家长中心拆分页面与组件。
+- 语文、数学、英语按 3–4 岁和 5–6 岁分层；本地题库每科每年龄段 50 题。
+- 家长账号登录；Supabase Postgres 保存学习设置、答题与学习时长记录。
+- 每日题量和时长由家长调整；达到目标后提醒，不阻止继续使用。
+- 家长中心提供一周学习统计、答题分析和 24 条带出处的启蒙资料检索。
+- PWA 基础配置已包含清单、Service Worker、桌面和手机安装入口；安装需要 HTTPS。
+- 已关联的 Sites 网站访问策略目前只允许所有者本人。该网站尚未发布；Supabase 生产环境变量和线上登录/数据权限仍需验证。
+
+## 技术结构
+
+- **前端：** React + TypeScript + Vite；PWA manifest 和 Service Worker 提供安装入口及有限的静态页面缓存。
+- **认证与云端数据：** Supabase Auth + Postgres + Row Level Security (RLS)。
+- **答题接口：** 由 Supabase RPC 在数据库端读取题目、核对答案并记录结果；前端不应拥有 `service_role` 密钥。
+- **资料检索：** 本地整理的 24 条资料摘要，以关键词匹配并展示来源；这是轻量资料检索，不是向量 RAG，也不调用生成式 AI。
+- **后端范围：** 当前没有自建 Node/Express 服务；认证、数据库和受权限保护的答题操作由 Supabase 提供。
 
 ## 本地运行
 
+需要 Node.js 和 npm。在项目目录运行：
+
 ```bash
 npm install
+```
+
+复制 `.env.example` 为 `.env.local`，填写 Supabase 项目地址和 **Publishable key**，再运行：
+
+```bash
 npm run dev
 ```
+
+只填写 `VITE_SUPABASE_URL` 与 `VITE_SUPABASE_PUBLISHABLE_KEY`。不要把 Supabase `service_role`/secret key 放入前端环境变量、代码、截图或 GitHub。`.env.local` 已由 Git 忽略。
 
 ## 检查
 
@@ -23,28 +43,29 @@ npm run lint
 npm run build
 ```
 
-## 数据层
+## Supabase 配置检查
 
-- `src/services/learningStore.ts`：本机备用数据存储；
-- `src/services/cloudLearningStore.ts`：Supabase 云端同步；
-- `supabase/schema.sql`：数据库表和家长数据权限；
-- `.env.example`：Supabase 公开连接配置模板。不要把 `.env.local` 上传到 GitHub。
+数据库迁移脚本位于 `supabase/`。首次配置应按项目记录的迁移顺序执行；升级题库后，最后应用 `secure_cloud_quiz.sql`，再检查其末尾的权限查询结果。上线前还需要在 Supabase Auth 中关闭新用户注册，并用已存在的家长账号实际登录和检查数据隔离。关闭注册不影响已注册账号登录。
 
-## 题库扩展
+需要确认的安全行为：
 
-- 本地题库为每科、每个年龄段各 50 道题（每科合计 100 道）；
-- 在 Supabase SQL Editor 执行 `supabase/add_question_bank_100.sql`，脚本会为每科、每个年龄段新增 38 道题，并保留已有的 12 道入门题；
-- 云端题库加载失败时，应用会使用相同的本地年龄分层题库。
+1. 匿名用户无法读取家庭学习记录或答题正确答案。
+2. 已登录家长只能读取其账号下的儿童资料和学习记录。
+3. 前端只能调用受控答题 RPC，不能自行写入正确答案或其他家庭的数据。
+4. `profiles`、`children`、设置、学习任务和答题记录都启用了 RLS；题库正确答案由数据库端核对。
 
-## 个人使用权限
+## 手机安装和演示
 
-- 应用页面要求家长账号登录，网页不提供新账号注册入口；
-- 部署前还需要在 Supabase Auth 设置中关闭“Allow new users to sign up”。关闭后，已存在的家长账号仍可登录；
-- Supabase 官方说明：[Auth 通用配置](https://supabase.com/docs/guides/auth/general-configuration)。
+发布到 HTTPS 后：
 
-## 启蒙知识库与检索（第一阶段）
+- Android：使用 Chrome 打开网址，在浏览器菜单选择“安装应用”或“添加到主屏幕”。
+- iPhone/iPad：使用 Safari 打开网址，点“分享”→“添加到主屏幕”。
+- 安装后仍需要网络登录 Supabase；目前缓存的是部分静态页面资源，不承诺离线答题或离线同步。
 
-- 家长中心提供按科目检索的启蒙资料；会优先显示儿童当前年龄段的结果，也补充展示相关年龄段内容；
-- 首批中文资料摘要保存在 `src/data/learningKnowledge.ts`，每条资料都附有原始来源链接；
-- `src/services/knowledgeSearch.ts` 使用本地关键词和常见问法匹配，不会把搜索内容发送到第三方；
-- 这是 RAG 的“检索”准备阶段，目前没有向量检索，也不会由 AI 自动生成回答；不需要模型密钥或付费 API。
+演示前请按 [`docs/demo-checklist.md`](docs/demo-checklist.md) 检查手机页面，并使用虚构测试账号和虚构学习数据。不要把真实邮箱、儿童资料或学习记录放进公开截图/录屏。
+
+## 简历表述参考
+
+> 独立设计并实现面向幼儿家庭的启蒙学习 PWA，使用 React、TypeScript 和 Supabase 构建登录、分龄题库、答题记录与家长学习设置；通过 RLS 与数据库 RPC 限制家庭数据访问并在服务端核对答案；实现带来源链接的本地启蒙资料检索。
+
+请在完成 HTTPS 发布、线上账号登录、数据权限验证和真实手机检查后，再把“已部署/可安装”作为项目成果描述。当前版本仍是个人使用的作品集原型，不是应用商店上架的原生 App。

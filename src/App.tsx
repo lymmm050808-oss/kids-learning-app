@@ -12,7 +12,7 @@ import { learningStore } from './services/learningStore'
 import { createFreshDaily, dateKey, rollDailyProgress } from './services/dailyProgress'
 import { initializeCloudLearning, saveCloudLearning } from './services/cloudLearningStore'
 import { countCloudAnswers, finishLearningSession, loadLearningInsights, startLearningSession, submitCloudAnswer, type LearningInsight } from './services/answerTrackingService'
-import { checkSupabaseConnection, supabase } from './services/supabaseClient'
+import { checkSupabaseConnection, isSupabaseConfigured, supabase } from './services/supabaseClient'
 import type { AnswerOutcome, AppView, LearningState, ParentSettings, SubjectId } from './types/domain'
 
 const initialState = (): LearningState => {
@@ -173,6 +173,7 @@ function App() {
     setView('home')
   }
   const updateSettings = (settings: ParentSettings) => updateState((current) => ({ ...current, settings }))
+  if (!isSupabaseConfigured && import.meta.env.PROD) return <main className="app-shell"><section className="panel parent-auth" role="alert"><p className="eyebrow dark">暂时无法进入</p><h2>应用配置尚未完成</h2><p>家长登录服务暂时不可用，请联系维护者完成配置后再试。</p></section></main>
   if (supabase && !authReady) return <main className="app-shell"><section className="panel parent-auth"><p>正在检查家长登录状态…</p></section></main>
   if (supabase && !parentEmail) return <main className="app-shell"><ParentAuth /></main>
   return <main className="app-shell">

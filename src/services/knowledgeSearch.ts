@@ -13,9 +13,15 @@ function normalize(value: string) {
 const questionFillers = ['我想知道', '我想问问', '请告诉我', '有没有办法', '不太愿意', '该怎么办', '怎么办', '怎么样', '请问', '请帮我', '能不能', '可不可以', '怎么才能', '应该怎么', '如何才能', '为什么', '怎样', '如何', '怎么', '孩子', '幼儿', '宝宝', '小朋友', '小孩', '家长', '这个', '一下', '可以', '吗', '呢', '呀', '啊']
 
 const topicAliases = {
-  chinese: ['阅读', '看书', '读书', '绘本', '识字', '认字', '讲故事', '故事', '表达', '不爱看书', '不喜欢看书', '不愿意阅读', '阅读兴趣', '不爱认字'],
-  math: ['数学', '数数', '数字', '数量', '比较', '分类', '规律', '图形', '形状', '大小', '多少', '积木', '逻辑', '生活数学', '加减'],
-  english: ['英语', '英文', '单词', '儿歌', '歌曲', '双语', '发音', '口语', '听力', '开口', '英语启蒙', '不敢说英语', '不愿说英语'],
+  chinese: ['语文', '阅读', '看书', '读书', '绘本', '识字', '认字', '拼音', '汉字', '写字', '抄写', '涂鸦', '讲故事', '故事', '复述', '表达', '词语', '口语', '儿歌', '童谣', '不爱看书', '不喜欢看书', '不愿意阅读', '阅读兴趣', '不爱认字', '不说话'],
+  math: ['数学', '数数', '数字', '数量', '点数', '一一对应', '比较', '分类', '整理', '规律', '排序', '图形', '形状', '空间', '方位', '位置', '大小', '多少', '长短', '轻重', '测量', '积木', '拼图', '逻辑', '生活数学', '加减'],
+  english: ['英语', '英文', '单词', '词汇', '儿歌', '歌曲', '绘本', '双语', '发音', '口语', '听力', '开口', '字母', '自然拼读', '英语启蒙', '不敢说英语', '不愿说英语', '不肯开口', '不愿意开口', '背单词'],
+} satisfies Record<KnowledgeSubject, string[]>
+
+const explicitSubjectAliases = {
+  chinese: ['语文', '中文', '汉字', '拼音', '识字', '认字'],
+  math: ['数学', '数数', '数字', '数量', '加减', '算数'],
+  english: ['英语', '英文', 'english'],
 } satisfies Record<KnowledgeSubject, string[]>
 
 function chineseBigrams(value: string) {
@@ -58,9 +64,15 @@ export function searchKnowledge(query: string, options: KnowledgeSearchOptions =
   if (!cleanedQuery) return []
 
   const normalizedCore = coreQuery(query)
+  const explicitSubjects = (Object.keys(explicitSubjectAliases) as KnowledgeSubject[])
+    .filter((subject) => explicitSubjectAliases[subject].some((alias) => normalizedCore.includes(normalize(alias))))
   const inferredSubjects = (Object.keys(topicAliases) as KnowledgeSubject[])
     .filter((subject) => topicAliases[subject].some((alias) => normalizedCore.includes(normalize(alias))))
-  const inferredSubject = inferredSubjects.length === 1 ? inferredSubjects[0] : undefined
+  const inferredSubject = explicitSubjects.length === 1
+    ? explicitSubjects[0]
+    : explicitSubjects.length > 1
+      ? undefined
+      : inferredSubjects.length === 1 ? inferredSubjects[0] : undefined
   const selectedSubject = options.subject && options.subject !== 'all' ? options.subject : inferredSubject
   const preferredAge = options.ageGroup === 'all' ? undefined : options.ageGroup
 
