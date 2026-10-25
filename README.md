@@ -35,3 +35,9 @@ npm run build
 - 本地题库为每科、每个年龄段各 50 道题（每科合计 100 道）；
 - 在 Supabase SQL Editor 执行 `supabase/add_question_bank_100.sql`，脚本会为每科、每个年龄段新增 38 道题，并保留已有的 12 道入门题；
 - 云端题库加载失败时，应用会使用相同的本地年龄分层题库。
+
+## 个人使用权限
+
+- 应用页面要求家长账号登录，网页不提供新账号注册入口；
+- 部署前还需要在 Supabase Auth 设置中关闭“Allow new users to sign up”。关闭后，已存在的家长账号仍可登录；
+- Supabase 官方说明：[Auth 通用配置](https://supabase.com/docs/guides/auth/general-configuration)。

@@ -2,7 +2,6 @@ import { type FormEvent, useState } from 'react'
 import { supabase } from '../services/supabaseClient'
 
 export function ParentAuth() {
-  const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
@@ -13,32 +12,21 @@ export function ParentAuth() {
     if (!supabase) return setMessage('云端数据库尚未连接。')
     setBusy(true)
     setMessage('')
-    const result = mode === 'login'
-      ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({
-          email,
-          password,
-          options: { emailRedirectTo: `${window.location.origin}/` },
-        })
+    const result = await supabase.auth.signInWithPassword({ email, password })
     setBusy(false)
     if (result.error) return setMessage(result.error.message)
-    if (mode === 'register' && !result.data.session) {
-      setMessage('注册成功。请到邮箱中点击确认链接，然后返回这里登录。')
-    } else {
-      setMessage(mode === 'login' ? '登录成功。' : '注册并登录成功。')
-    }
+    setMessage('登录成功。')
   }
 
   return <section className="panel parent-auth">
     <p className="eyebrow dark">仅供家长使用</p>
-    <h2>{mode === 'login' ? '家长登录' : '创建家长账号'}</h2>
-    <p className="auth-intro">家长登录后，孩子就可以进入知识星球；学习记录与家长设置会安全保存在云端。</p>
+    <h2>家长登录</h2>
+    <p className="auth-intro">请使用已注册的家长账号登录。登录后，孩子就可以进入知识星球；学习记录与家长设置会安全保存在云端。</p>
     <form onSubmit={submit}>
       <label>邮箱<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required placeholder="请输入家长邮箱" /></label>
-      <label>密码<input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} required placeholder="至少 6 位" /></label>
-      <button className="primary-button" disabled={busy}>{busy ? '请稍候…' : mode === 'login' ? '登录' : '注册'}</button>
+      <label>密码<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required placeholder="请输入家长账号密码" /></label>
+      <button className="primary-button" disabled={busy}>{busy ? '请稍候…' : '登录'}</button>
     </form>
     {message && <p className="auth-message" role="status">{message}</p>}
-    <button className="text-button" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setMessage('') }}>{mode === 'login' ? '还没有账号？创建一个' : '已有账号？返回登录'}</button>
   </section>
 }
