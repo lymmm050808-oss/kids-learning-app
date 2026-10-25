@@ -9,16 +9,26 @@ import { HomePage } from './pages/HomePage'
 import { LearningPage } from './pages/LearningPage'
 import { ParentPage } from './pages/ParentPage'
 import { learningStore } from './services/learningStore'
+import { createFreshDaily, dateKey, rollDailyProgress } from './services/dailyProgress'
 import { initializeCloudLearning, saveCloudLearning } from './services/cloudLearningStore'
-import { countCloudAnswers, finishLearningSession, loadLearningInsights, recordCloudAnswer, startLearningSession, type LearningInsight } from './services/answerTrackingService'
+import { countCloudAnswers, finishLearningSession, loadLearningInsights, startLearningSession, submitCloudAnswer, type LearningInsight } from './services/answerTrackingService'
 import { checkSupabaseConnection, supabase } from './services/supabaseClient'
-import type { AppView, LearningState, ParentSettings, SubjectId } from './types/domain'
+import type { AnswerOutcome, AppView, LearningState, ParentSettings, SubjectId } from './types/domain'
 
-const today = () => new Date().toLocaleDateString('en-CA')
-const freshDaily = () => ({ date: today(), activeSeconds: 0, correct: { chinese: 0, math: 0, english: 0 }, attempts: { chinese: 0, math: 0, english: 0 }, noticeShown: false })
 const initialState = (): LearningState => {
-  const fallback: LearningState = { stars: 0, settings: { ageGroup: appConfig.defaultAgeGroup, dailyQuestionGoal: appConfig.defaultDailyQuestionGoal, dailyTimeLimitMinutes: appConfig.defaultDailyTimeLimitMinutes }, daily: freshDaily(), history: [] }
-  try { const saved = learningStore.load(); if (!saved) return fallback; const isToday = saved.daily?.date === today(); const history = [...(saved.history || []), ...(saved.daily?.date && !isToday ? [saved.daily] : [])].filter((day, index, all) => all.findIndex((item) => item.date === day.date) === index).slice(-30); return { ...fallback, ...saved, history, settings: { ...fallback.settings, ...saved.settings }, daily: isToday ? { ...fallback.daily, ...saved.daily } : freshDaily() } } catch { return fallback }
+  const fallback: LearningState = { stars: 0, settings: { ageGroup: appConfig.defaultAgeGroup, dailyQuestionGoal: appConfig.defaultDailyQuestionGoal, dailyTimeLimitMinutes: appConfig.defaultDailyTimeLimitMinutes }, daily: createFreshDaily(), history: [] }
+  try {
+    const saved = learningStore.load()
+    if (!saved) return fallback
+    const merged: LearningState = {
+      ...fallback,
+      ...saved,
+      history: saved.history || [],
+      settings: { ...fallback.settings, ...saved.settings },
+      daily: { ...fallback.daily, ...saved.daily },
+    }
+    return rollDailyProgress(merged)
+  } catch { return fallback }
 }
 const reminderFor = ({ daily, settings }: LearningState) => {
   if (daily.noticeShown) return null
@@ -50,7 +60,9 @@ function App() {
   const sessionActiveSecondsRef = useRef(0)
   const sessionFinishedRef = useRef(true)
   const updateState = useCallback((makeNext: (current: LearningState) => LearningState) => {
-    let next = makeNext(stateRef.current)
+    const rolled = rollDailyProgress(stateRef.current)
+    if (rolled !== stateRef.current) setReminder(null)
+    let next = makeNext(rolled)
     const reminderText = reminderFor(next)
     if (reminderText) {
       setReminder(reminderText)
@@ -59,6 +71,16 @@ function App() {
     stateRef.current = next
     setState(next)
   }, [])
+  useEffect(() => {
+    const checkForNewDay = () => {
+      if (stateRef.current.daily.date !== dateKey()) {
+        setReminder(null)
+        updateState((current) => current)
+      }
+    }
+    const timer = window.setInterval(checkForNewDay, 30_000)
+    return () => window.clearInterval(timer)
+  }, [updateState])
   useEffect(() => { stateRef.current = state; learningStore.save(state) }, [state])
   useEffect(() => {
     checkSupabaseConnection().then((result) => {
@@ -130,20 +152,29 @@ function App() {
       ? startLearningSession(childId, nextSubject, state.settings.ageGroup).catch((error: unknown) => { setTrackingStatus(`任务建档失败：${error instanceof Error ? error.message : '未知错误'}`); return null })
       : null
   }
-  const recordAnswer = (correct: boolean, questionId: string | undefined, selectedAnswer: string) => {
-    updateState((current) => ({ ...current, stars: current.stars + (correct ? 1 : 0), daily: { ...current.daily, attempts: { ...current.daily.attempts, [subject]: current.daily.attempts[subject] + 1 }, correct: { ...current.daily.correct, [subject]: current.daily.correct[subject] + (correct ? 1 : 0) } } }))
-    if (childId && questionId && sessionPromiseRef.current) {
-      sessionPromiseRef.current.then((sessionId) => {
-        if (sessionId) return recordCloudAnswer({ sessionId, childId, questionId, selectedAnswer, correct })
-          .then(() => setTrackingStatus('本次答题明细已记录'))
-      }).catch((error: unknown) => setTrackingStatus(`答题明细失败：${error instanceof Error ? error.message : '未知错误'}`))
+  const recordAnswer = async (questionId: string | undefined, selectedAnswer: string, localCorrectAnswer?: string, useCloud = false): Promise<AnswerOutcome> => {
+    let outcome: AnswerOutcome
+    if (useCloud) {
+      if (!questionId || !childId || !sessionPromiseRef.current) throw new Error('学习档案还没准备好，请稍后再试。')
+      const sessionId = await sessionPromiseRef.current
+      if (!sessionId) throw new Error('本次学习任务暂时无法记录，请稍后再试。')
+      outcome = await submitCloudAnswer({ sessionId, questionId, selectedAnswer })
+      setTrackingStatus('本次答题已由云端核对并记录')
+    } else {
+      if (localCorrectAnswer === undefined) throw new Error('这道题暂时无法核对，请稍后再试。')
+      outcome = { correct: selectedAnswer === localCorrectAnswer, correctAnswer: localCorrectAnswer, persisted: false }
     }
+    const { correct } = outcome
+    updateState((current) => ({ ...current, stars: current.stars + (correct ? 1 : 0), daily: { ...current.daily, attempts: { ...current.daily.attempts, [subject]: current.daily.attempts[subject] + 1 }, correct: { ...current.daily.correct, [subject]: current.daily.correct[subject] + (correct ? 1 : 0) } } }))
+    return outcome
   }
   const leaveLearning = () => {
     finishSession(false)
     setView('home')
   }
   const updateSettings = (settings: ParentSettings) => updateState((current) => ({ ...current, settings }))
+  if (supabase && !authReady) return <main className="app-shell"><section className="panel parent-auth"><p>正在检查家长登录状态…</p></section></main>
+  if (supabase && !parentEmail) return <main className="app-shell"><ParentAuth /></main>
   return <main className="app-shell">
     <AppHeader stars={state.stars} />
     <InstallAppButton />
@@ -156,4 +187,3 @@ function App() {
   </main>
 }
 export default App
-

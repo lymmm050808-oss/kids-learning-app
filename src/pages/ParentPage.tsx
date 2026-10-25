@@ -1,13 +1,13 @@
 import { appConfig } from '../config/appConfig'
+import { dateKeyOffset } from '../services/dailyProgress'
 import type { DailyProgress, ParentSettings } from '../types/domain'
 interface Props { stars: number; settings: ParentSettings; daily: DailyProgress; history: DailyProgress[]; cloudStatus: string; onChange: (settings: ParentSettings) => void; onBack: () => void }
 const emptyCounts = () => ({ chinese: 0, math: 0, english: 0 })
-const dateOffset = (days: number) => { const date = new Date(); date.setDate(date.getDate() - days); return date.toLocaleDateString('en-CA') }
 export function ParentPage({ stars, settings, daily, history, cloudStatus, onChange, onBack }: Props) {
   const set = <K extends keyof ParentSettings>(key: K, value: ParentSettings[K]) => onChange({ ...settings, [key]: value })
   const accuracy = (correct: number, attempts: number) => attempts ? `${Math.round(correct / attempts * 100)}%` : '—'
   const records = new Map([...history, daily].map((record) => [record.date, record]))
-  const week = Array.from({ length: 7 }, (_, index) => { const date = dateOffset(6-index); return records.get(date) || { date, activeSeconds:0, correct:emptyCounts(), attempts:emptyCounts(), noticeShown:false } })
+  const week = Array.from({ length: 7 }, (_, index) => { const date = dateKeyOffset(index-6); return records.get(date) || { date, activeSeconds:0, correct:emptyCounts(), attempts:emptyCounts(), noticeShown:false } })
   const totals = week.map((day) => Object.values(day.correct).reduce((sum,value)=>sum+value,0))
   const max = Math.max(1,...totals)
   const weekCorrect = totals.reduce((sum,value)=>sum+value,0)

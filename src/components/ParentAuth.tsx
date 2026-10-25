@@ -32,7 +32,7 @@ export function ParentAuth() {
   return <section className="panel parent-auth">
     <p className="eyebrow dark">仅供家长使用</p>
     <h2>{mode === 'login' ? '家长登录' : '创建家长账号'}</h2>
-    <p className="auth-intro">登录后，孩子的学习记录与家长设置可以在云端安全保存。</p>
+    <p className="auth-intro">家长登录后，孩子就可以进入知识星球；学习记录与家长设置会安全保存在云端。</p>
     <form onSubmit={submit}>
       <label>邮箱<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required placeholder="请输入家长邮箱" /></label>
       <label>密码<input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} required placeholder="至少 6 位" /></label>

@@ -1,4 +1,5 @@
 import type { LearningState } from '../types/domain'
+import { rollDailyProgress } from './dailyProgress'
 import { supabase } from './supabaseClient'
 
 interface CloudBootstrap {
@@ -49,7 +50,17 @@ export async function initializeCloudLearning(localState: LearningState): Promis
     .maybeSingle()
   if (snapshotError) throw new Error(snapshotError.message)
   if (snapshot?.state_json) {
-    return { childId: resolvedChildId, state: snapshot.state_json as LearningState, source: 'cloud' }
+    const savedState = snapshot.state_json as LearningState
+    const state = rollDailyProgress(savedState)
+    if (state !== savedState) {
+      const { error } = await supabase.from('learning_snapshots').upsert({
+        child_id: resolvedChildId,
+        state_json: state,
+        updated_at: new Date().toISOString(),
+      })
+      if (error) throw new Error(error.message)
+    }
+    return { childId: resolvedChildId, state, source: 'cloud' }
   }
 
   await saveCloudLearning(resolvedChildId, localState)

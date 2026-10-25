@@ -17,13 +17,19 @@ export async function startLearningSession(childId: string, subject: SubjectId, 
   return data.id as string
 }
 
-export async function recordCloudAnswer(input: { sessionId: string; childId: string; questionId: string; selectedAnswer: string; correct: boolean }) {
-  if (!supabase) return
-  const { error } = await supabase.from('answer_records').insert({
-    client_event_id: crypto.randomUUID(), session_id: input.sessionId, child_id: input.childId,
-    question_id: input.questionId, selected_answer_text: input.selectedAnswer, is_correct: input.correct,
+export async function submitCloudAnswer(input: { sessionId: string; questionId: string; selectedAnswer: string }) {
+  if (!supabase) throw new Error('云端暂不可用，请稍后再试。')
+  const { data, error } = await supabase.rpc('submit_learning_answer', {
+    p_session_id: input.sessionId,
+    p_question_id: input.questionId,
+    p_selected_answer: input.selectedAnswer,
   })
   if (error) throw new Error(error.message)
+  const result = Array.isArray(data) ? data[0] : data
+  if (!result || typeof result.is_correct !== 'boolean' || typeof result.correct_answer !== 'string') {
+    throw new Error('云端没有返回有效的答题结果，请稍后再试。')
+  }
+  return { correct: result.is_correct, correctAnswer: result.correct_answer, persisted: true }
 }
 
 export async function finishLearningSession(sessionId: string, activeSeconds: number, completed: boolean) {
