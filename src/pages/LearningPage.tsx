@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import { appConfig } from '../config/appConfig'
 import { subjects } from '../data/subjects'
 import { loadQuestions } from '../services/questionService'
+import { LearningRecorder } from '../components/LearningRecorder'
 import type { AgeGroup, AnswerOutcome, Question, SubjectId } from '../types/domain'
 
-interface Props { subject: SubjectId; ageGroup: AgeGroup; onBack: () => void; onComplete: () => void; onAnswer: (questionId: string | undefined, selectedAnswer: string, localCorrectAnswer?: string, useCloud?: boolean) => Promise<AnswerOutcome>; onActiveSecond: () => void }
+interface Props { subject: SubjectId; ageGroup: AgeGroup; recordingAllowed: boolean; onBack: () => void; onComplete: () => void; onAnswer: (questionId: string | undefined, selectedAnswer: string, localCorrectAnswer?: string, useCloud?: boolean) => Promise<AnswerOutcome>; onActiveSecond: () => void }
 
-export function LearningPage({ subject, ageGroup, onBack, onComplete, onAnswer, onActiveSecond }: Props) {
+export function LearningPage({ subject, ageGroup, recordingAllowed, onBack, onComplete, onAnswer, onActiveSecond }: Props) {
   const current = subjects.find((item) => item.id === subject)!
   const [mission, setMission] = useState<Question[]>([])
   const [loading, setLoading] = useState(true)
@@ -20,7 +21,13 @@ export function LearningPage({ subject, ageGroup, onBack, onComplete, onAnswer, 
   const [answerError, setAnswerError] = useState<string | null>(null)
   const [correctCount, setCorrectCount] = useState(0)
   const [complete, setComplete] = useState(false)
+  const [recordingPending, setRecordingPending] = useState(false)
   const item = mission[index]
+
+  const handleBack = () => {
+    if (recordingPending && !window.confirm('还有一段录像没有下载。离开后这段录像会清除，确定返回首页吗？')) return
+    onBack()
+  }
 
   useEffect(() => {
     let active = true
@@ -81,10 +88,10 @@ export function LearningPage({ subject, ageGroup, onBack, onComplete, onAnswer, 
     window.speechSynthesis.speak(utterance)
   }
 
-  if (loading) return <section className="panel learning-panel complete-card"><div className="completion-stars">🪐</div><h2>正在准备探索题目…</h2><button className="back-button" onClick={onBack}>← 返回首页</button></section>
-  if (loadError) return <section className="panel learning-panel complete-card"><div className="completion-stars">☁️</div><h2>题目暂时没有准备好</h2><p>{loadError}</p><button className="back-button" onClick={onBack}>← 返回首页</button></section>
-  if (!item) return <section className="panel learning-panel complete-card"><div className="completion-stars">🪐</div><h2>暂时没有可探索的题目</h2><button className="back-button" onClick={onBack}>← 返回首页</button></section>
-  if (complete) return <section className="panel learning-panel complete-card"><div className="completion-stars">⭐ 🚀 ⭐</div><h2>探索任务完成啦！</h2><p>这次答对了 <strong>{correctCount}</strong> / {mission.length} 题</p><p>每一颗小星星，都是你认真探索的奖励。</p><button className="primary-button" onClick={onBack}>返回知识宇宙</button></section>
+  if (loading) return <section className="panel learning-panel complete-card"><div className="completion-stars">🪐</div><h2>正在准备探索题目…</h2><button className="back-button" onClick={handleBack}>← 返回首页</button></section>
+  if (loadError) return <section className="panel learning-panel complete-card"><div className="completion-stars">☁️</div><h2>题目暂时没有准备好</h2><p>{loadError}</p><button className="back-button" onClick={handleBack}>← 返回首页</button></section>
+  if (!item) return <section className="panel learning-panel complete-card"><div className="completion-stars">🪐</div><h2>暂时没有可探索的题目</h2><button className="back-button" onClick={handleBack}>← 返回首页</button></section>
+  if (complete) return <section className="panel learning-panel complete-card">{recordingAllowed && <LearningRecorder onUnsavedChange={setRecordingPending} />}<div className="completion-stars">⭐ 🚀 ⭐</div><h2>探索任务完成啦！</h2><p>这次答对了 <strong>{correctCount}</strong> / {mission.length} 题</p><p>每一颗小星星，都是你认真探索的奖励。</p><button className="primary-button" onClick={handleBack}>返回知识宇宙</button></section>
 
-  return <section className="panel learning-panel"><div className="learning-top"><button className="back-button" onClick={onBack}>← 返回首页</button><strong>{current.name} · 任务 {index + 1}/{mission.length}</strong><small title={questionSource === 'cloud' ? '题目来自云端题库' : '当前使用本地备用题库'}>{questionSource === 'cloud' ? '☁️' : '📦'}</small></div><div className="mission-progress"><span style={{ width: `${(index + 1) / mission.length * 100}%` }} /></div><div className="question-visual" aria-label={item.prompt}><div>{item.emoji}</div><strong>{item.prompt}</strong><button onClick={speak}>🔊 听一听</button></div><h2 className="question-title">{item.question}</h2><div className="answer-grid">{item.answers.map((answer) => <button key={answer} disabled={selected !== null || checking} className={selected !== null ? (answer === correctAnswer ? 'correct' : answer === selected ? 'wrong' : '') : ''} onClick={() => choose(answer)}>{answer}</button>)}</div>{checking && <div className="feedback">正在核对答案…</div>}{answerError && <div className="feedback retry">{answerError}</div>}{selected !== null && answerCorrect !== null && <div className={`feedback ${answerCorrect ? 'success' : 'retry'}`}>{answerCorrect ? '答对啦，摘到一颗星星！ ⭐' : `再认识一下，正确答案是“${correctAnswer}”`}</div>}{selected !== null && <button className="primary-button next-button" onClick={next}>{index === mission.length - 1 ? '完成任务' : '下一题 →'}</button>}</section>
+  return <section className="panel learning-panel"><div className="learning-top"><button className="back-button" onClick={handleBack}>← 返回首页</button><strong>{current.name} · 任务 {index + 1}/{mission.length}</strong><small title={questionSource === 'cloud' ? '题目来自云端题库' : '当前使用本地备用题库'}>{questionSource === 'cloud' ? '☁️' : '📦'}</small></div><div className="mission-progress"><span style={{ width: `${(index + 1) / mission.length * 100}%` }} /></div>{recordingAllowed && <LearningRecorder onUnsavedChange={setRecordingPending} />}<div className="question-visual" aria-label={item.prompt}><div>{item.emoji}</div><strong>{item.prompt}</strong><button onClick={speak}>🔊 听一听</button></div><h2 className="question-title">{item.question}</h2><div className="answer-grid">{item.answers.map((answer) => <button key={answer} disabled={selected !== null || checking} className={selected !== null ? (answer === correctAnswer ? 'correct' : answer === selected ? 'wrong' : '') : ''} onClick={() => choose(answer)}>{answer}</button>)}</div>{checking && <div className="feedback">正在核对答案…</div>}{answerError && <div className="feedback retry">{answerError}</div>}{selected !== null && answerCorrect !== null && <div className={`feedback ${answerCorrect ? 'success' : 'retry'}`}>{answerCorrect ? '答对啦，摘到一颗星星！ ⭐' : `再认识一下，正确答案是“${correctAnswer}”`}</div>}{selected !== null && <button className="primary-button next-button" onClick={next}>{index === mission.length - 1 ? '完成任务' : '下一题 →'}</button>}</section>
 }

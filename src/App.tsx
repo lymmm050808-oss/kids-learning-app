@@ -53,6 +53,7 @@ function App() {
   const [authReady, setAuthReady] = useState(!supabase)
   const [childId, setChildId] = useState<string | null>(null)
   const [answerDetailCount, setAnswerDetailCount] = useState(0)
+  const [recordingAllowed, setRecordingAllowed] = useState(false)
   const [trackingStatus, setTrackingStatus] = useState('答题明细等待记录')
   const [learningInsights, setLearningInsights] = useState<LearningInsight[]>([])
   const stateRef = useRef(state)
@@ -143,6 +144,9 @@ function App() {
       .then(() => { if (completed) setTrackingStatus('本次学习任务已完成并记录') })
       .catch((error: unknown) => setTrackingStatus(`学习任务记录失败：${error instanceof Error ? error.message : '未知错误'}`))
   }
+  const completeLearning = () => {
+    finishSession(true)
+  }
   const startLearning = (nextSubject: SubjectId) => {
     setSubject(nextSubject)
     setView('learning')
@@ -170,6 +174,7 @@ function App() {
   }
   const leaveLearning = () => {
     finishSession(false)
+    setRecordingAllowed(false)
     setView('home')
   }
   const updateSettings = (settings: ParentSettings) => updateState((current) => ({ ...current, settings }))
@@ -180,10 +185,10 @@ function App() {
     <AppHeader stars={state.stars} />
     <InstallAppButton />
     {view === 'home' && <HomePage ageGroup={state.settings.ageGroup} daily={state.daily} goal={state.settings.dailyQuestionGoal} onSelectSubject={startLearning} onOpenParent={() => setView('parent')} />}
-    {view === 'learning' && <LearningPage subject={subject} ageGroup={state.settings.ageGroup} onBack={leaveLearning} onComplete={() => finishSession(true)} onAnswer={recordAnswer} onActiveSecond={onActiveSecond} />}
+    {view === 'learning' && <LearningPage subject={subject} ageGroup={state.settings.ageGroup} recordingAllowed={recordingAllowed} onBack={leaveLearning} onComplete={completeLearning} onAnswer={recordAnswer} onActiveSecond={onActiveSecond} />}
     {view === 'parent' && !authReady && <section className="panel parent-auth"><p>正在检查家长登录状态…</p></section>}
     {view === 'parent' && authReady && !parentEmail && <ParentAuth />}
-    {view === 'parent' && authReady && parentEmail && <><div className="signed-in-bar"><span>家长账号：{parentEmail} · 已记录 {answerDetailCount} 次答题明细 · {trackingStatus}</span><button className="text-button" onClick={() => supabase?.auth.signOut()}>退出登录</button></div><ParentPage stars={state.stars} settings={state.settings} daily={state.daily} history={state.history} cloudStatus={cloudStatus} onChange={updateSettings} onBack={() => setView('home')} /><LearningInsights items={learningInsights} /></>}
+    {view === 'parent' && authReady && parentEmail && <><div className="signed-in-bar"><span>家长账号：{parentEmail} · 已记录 {answerDetailCount} 次答题明细 · {trackingStatus}</span><button className="text-button" onClick={() => supabase?.auth.signOut()}>退出登录</button></div><ParentPage stars={state.stars} settings={state.settings} daily={state.daily} history={state.history} cloudStatus={cloudStatus} recordingAllowed={recordingAllowed} onChange={updateSettings} onToggleRecording={setRecordingAllowed} onBack={() => setView('home')} /><LearningInsights items={learningInsights} /></>}
     {reminder && <div className="rest-overlay" role="dialog" aria-modal="true"><div><span>🌙 ⭐</span><h2>休息一下吧</h2><p>{reminder}</p><button className="primary-button" onClick={() => setReminder(null)}>知道啦，我稍后再休息</button></div></div>}
   </main>
 }
