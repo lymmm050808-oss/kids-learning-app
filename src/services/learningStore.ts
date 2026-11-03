@@ -1,6 +1,7 @@
 import type { LearningState } from '../types/domain'
+import { demoMode } from '../config/demo'
 
-const STORAGE_KEY = 'kids-learning-state'
+const STORAGE_KEY = demoMode ? 'kids-learning-demo-state-v1' : 'kids-learning-state'
 const STORAGE_VERSION = 1
 
 interface StoredPayload { version: number; data: LearningState }
@@ -27,3 +28,7 @@ export const localLearningStore: LearningStore = {
 
 // 后续接入 Supabase 时，只需实现相同的 load/save 约定，页面无需重写。
 export const learningStore: LearningStore = localLearningStore
+
+export function resetLearningState() {
+  try { localStorage.removeItem(STORAGE_KEY) } catch { /* local storage may be unavailable */ }
+}
