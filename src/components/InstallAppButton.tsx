@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { demoMode } from '../config/demo'
 
 interface InstallPromptEvent extends Event { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> }
 
@@ -11,7 +12,7 @@ export function InstallAppButton() {
     window.addEventListener('beforeinstallprompt', ready); window.addEventListener('appinstalled', done)
     return () => { window.removeEventListener('beforeinstallprompt', ready); window.removeEventListener('appinstalled', done) }
   }, [])
-  if (installed || !promptEvent) return null
+  if (demoMode || installed || !promptEvent) return null
   const install = async () => { await promptEvent.prompt(); const choice = await promptEvent.userChoice; if (choice.outcome === 'accepted') setPromptEvent(null) }
   return <button className="install-app-button" onClick={install}>⬇ 安装“幼儿启蒙”</button>
 }
