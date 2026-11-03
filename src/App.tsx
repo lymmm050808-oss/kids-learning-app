@@ -3,8 +3,11 @@ import './App.css'
 import { AppHeader } from './components/AppHeader'
 import { ParentAuth } from './components/ParentAuth'
 import { LearningInsights } from './components/LearningInsights'
+import { DemoNotice } from './components/DemoNotice'
 import { InstallAppButton } from './components/InstallAppButton'
 import { appConfig } from './config/appConfig'
+import { demoMode } from './config/demo'
+import { createDemoState, demoLearningInsights } from './data/demoState'
 import { HomePage } from './pages/HomePage'
 import { LearningPage } from './pages/LearningPage'
 import { ParentPage } from './pages/ParentPage'
@@ -16,7 +19,7 @@ import { checkSupabaseConnection, isSupabaseConfigured, supabase } from './servi
 import type { AnswerOutcome, AppView, LearningState, ParentSettings, SubjectId } from './types/domain'
 
 const initialState = (): LearningState => {
-  const fallback: LearningState = { stars: 0, settings: { ageGroup: appConfig.defaultAgeGroup, dailyQuestionGoal: appConfig.defaultDailyQuestionGoal, dailyTimeLimitMinutes: appConfig.defaultDailyTimeLimitMinutes }, daily: createFreshDaily(), history: [] }
+  const fallback: LearningState = demoMode ? createDemoState() : { stars: 0, settings: { ageGroup: appConfig.defaultAgeGroup, dailyQuestionGoal: appConfig.defaultDailyQuestionGoal, dailyTimeLimitMinutes: appConfig.defaultDailyTimeLimitMinutes }, daily: createFreshDaily(), history: [] }
   try {
     const saved = learningStore.load()
     if (!saved) return fallback
@@ -48,7 +51,7 @@ function App() {
   const [subject, setSubject] = useState<SubjectId>('chinese')
   const [state, setState] = useState(initial.state)
   const [reminder, setReminder] = useState<string | null>(initial.reminder)
-  const [cloudStatus, setCloudStatus] = useState('正在检查云端连接…')
+  const [cloudStatus, setCloudStatus] = useState(demoMode ? '演示模式：数据仅保存在当前浏览器' : '正在检查云端连接…')
   const [parentEmail, setParentEmail] = useState<string | null>(null)
   const [authReady, setAuthReady] = useState(!supabase)
   const [childId, setChildId] = useState<string | null>(null)
@@ -84,6 +87,7 @@ function App() {
   }, [updateState])
   useEffect(() => { stateRef.current = state; learningStore.save(state) }, [state])
   useEffect(() => {
+    if (demoMode) return
     checkSupabaseConnection().then((result) => {
       setCloudStatus(result.ok ? '云端数据库已连接' : `云端尚未连接：${result.message}`)
     })
@@ -117,7 +121,7 @@ function App() {
     }).catch((error: unknown) => setTrackingStatus(`学习分析暂不可用：${error instanceof Error ? error.message : '未知错误'}`))
   }, [view, childId])
   useEffect(() => {
-    if (!supabase) return
+    if (demoMode || !supabase) return
     supabase.auth.getSession().then(({ data }) => {
       setParentEmail(data.session?.user.email || null)
       if (!data.session) setChildId(null)
@@ -178,17 +182,19 @@ function App() {
     setView('home')
   }
   const updateSettings = (settings: ParentSettings) => updateState((current) => ({ ...current, settings }))
-  if (!isSupabaseConfigured && import.meta.env.PROD) return <main className="app-shell"><section className="panel parent-auth" role="alert"><p className="eyebrow dark">暂时无法进入</p><h2>应用配置尚未完成</h2><p>家长登录服务暂时不可用，请联系维护者完成配置后再试。</p></section></main>
+  if (!demoMode && !isSupabaseConfigured && import.meta.env.PROD) return <main className="app-shell"><section className="panel parent-auth" role="alert"><p className="eyebrow dark">暂时无法进入</p><h2>应用配置尚未完成</h2><p>家长登录服务暂时不可用，请联系维护者完成配置后再试。</p></section></main>
   if (supabase && !authReady) return <main className="app-shell"><section className="panel parent-auth"><p>正在检查家长登录状态…</p></section></main>
   if (supabase && !parentEmail) return <main className="app-shell"><ParentAuth /></main>
   return <main className="app-shell">
-    <AppHeader stars={state.stars} />
+    <AppHeader stars={state.stars} demo={demoMode} />
+    <DemoNotice />
     <InstallAppButton />
     {view === 'home' && <HomePage ageGroup={state.settings.ageGroup} daily={state.daily} goal={state.settings.dailyQuestionGoal} onSelectSubject={startLearning} onOpenParent={() => setView('parent')} />}
     {view === 'learning' && <LearningPage subject={subject} ageGroup={state.settings.ageGroup} recordingAllowed={recordingAllowed} onBack={leaveLearning} onComplete={completeLearning} onAnswer={recordAnswer} onActiveSecond={onActiveSecond} />}
-    {view === 'parent' && !authReady && <section className="panel parent-auth"><p>正在检查家长登录状态…</p></section>}
-    {view === 'parent' && authReady && !parentEmail && <ParentAuth />}
-    {view === 'parent' && authReady && parentEmail && <><div className="signed-in-bar"><span>家长账号：{parentEmail} · 已记录 {answerDetailCount} 次答题明细 · {trackingStatus}</span><button className="text-button" onClick={() => supabase?.auth.signOut()}>退出登录</button></div><ParentPage stars={state.stars} settings={state.settings} daily={state.daily} history={state.history} cloudStatus={cloudStatus} recordingAllowed={recordingAllowed} onChange={updateSettings} onToggleRecording={setRecordingAllowed} onBack={() => setView('home')} /><LearningInsights items={learningInsights} /></>}
+    {view === 'parent' && demoMode && <><div className="signed-in-bar"><span>演示家长账号 · 示例记录仅保存在此浏览器</span></div><ParentPage stars={state.stars} settings={state.settings} daily={state.daily} history={state.history} cloudStatus={cloudStatus} recordingAllowed={recordingAllowed} onChange={updateSettings} onToggleRecording={setRecordingAllowed} onBack={() => setView('home')} /><LearningInsights items={[...demoLearningInsights]} demoMode /></>}
+    {view === 'parent' && !demoMode && !authReady && <section className="panel parent-auth"><p>正在检查家长登录状态…</p></section>}
+    {view === 'parent' && !demoMode && authReady && !parentEmail && <ParentAuth />}
+    {view === 'parent' && !demoMode && authReady && parentEmail && <><div className="signed-in-bar"><span>家长账号：{parentEmail} · 已记录 {answerDetailCount} 次答题明细 · {trackingStatus}</span><button className="text-button" onClick={() => supabase?.auth.signOut()}>退出登录</button></div><ParentPage stars={state.stars} settings={state.settings} daily={state.daily} history={state.history} cloudStatus={cloudStatus} recordingAllowed={recordingAllowed} onChange={updateSettings} onToggleRecording={setRecordingAllowed} onBack={() => setView('home')} /><LearningInsights items={learningInsights} /></>}
     {reminder && <div className="rest-overlay" role="dialog" aria-modal="true"><div><span>🌙 ⭐</span><h2>休息一下吧</h2><p>{reminder}</p><button className="primary-button" onClick={() => setReminder(null)}>知道啦，我稍后再休息</button></div></div>}
   </main>
 }
