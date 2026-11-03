@@ -1,9 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
+import { demoMode } from '../config/demo'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
 
-export const isSupabaseConfigured = Boolean(
+export const isSupabaseConfigured = !demoMode && Boolean(
   supabaseUrl &&
   supabasePublishableKey &&
   !supabasePublishableKey.includes('请在这里粘贴'),
